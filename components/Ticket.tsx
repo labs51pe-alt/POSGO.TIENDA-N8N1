@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Transaction, StoreSettings, CashShift } from '../types';
-import { Printer, X, CheckCircle, MessageCircle, Rocket, Share2, Send, Users, ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react';
+import { Printer, X, CheckCircle, MessageCircle, Rocket, Share2, Send, Users, ArrowLeft, ChevronDown, RefreshCw, AlertCircle } from 'lucide-react';
 import { COUNTRIES } from '../constants';
 
 interface TicketProps {
@@ -49,7 +49,15 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
         try {
             const webhookUrl = 'https://webhook.red51.site/webhook/posgo_ticket';
             
-            // PAYLOAD ACTUALIZADO: Enviamos objetos completos para que n8n genere el PDF
+            // Build safe items array
+            const items = (data as Transaction).items ? (data as Transaction).items.map(item => ({
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                total: item.price * item.quantity
+            })) : [];
+
+            // PAYLOAD
             const payload = {
                 phone: fullPhone,
                 type: 'SALE_TICKET_PDF',
@@ -61,18 +69,13 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
                     taxRate: settings.taxRate
                 },
                 transaction: {
-                    id: (data as Transaction).id,
-                    date: (data as Transaction).date,
-                    total: (data as Transaction).total,
-                    subtotal: (data as Transaction).subtotal,
-                    discount: (data as Transaction).discount,
-                    items: (data as Transaction).items.map(item => ({
-                        name: item.name,
-                        quantity: item.quantity,
-                        price: item.price,
-                        total: item.price * item.quantity
-                    })),
-                    payments: (data as Transaction).payments || [{ method: (data as Transaction).paymentMethod, amount: (data as Transaction).total }]
+                    id: (data as Transaction).id || 'UNKNOWN',
+                    date: (data as Transaction).date || new Date().toISOString(),
+                    total: (data as Transaction).total || 0,
+                    subtotal: (data as Transaction).subtotal || 0,
+                    discount: (data as Transaction).discount || 0,
+                    items: items,
+                    payments: (data as Transaction).payments || [{ method: (data as Transaction).paymentMethod || 'cash', amount: (data as Transaction).total || 0 }]
                 }
             };
             
@@ -83,33 +86,18 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
             });
 
             if (!response.ok) {
-                throw new Error(`Error del servidor: ${response.status}`);
+                const errorText = await response.text();
+                throw new Error(`Error del servidor (${response.status}): ${errorText}`);
             }
             
             alert('Ticket enviado correctamente.');
             setIsWhatsAppMode(false);
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error sending webhook:", error);
-            alert('Hubo un error al generar o enviar el ticket. Verifica el número o intenta de nuevo.');
+            alert(`Hubo un error al enviar el ticket: ${error.message}`);
         } finally {
             setSending(false);
         }
-    };
-
-    const openLegacyWhatsApp = () => {
-        // Fallback a texto simple si usan el botón web
-        if (type !== 'SALE') return;
-        const t = data as Transaction;
-        const date = new Date(t.date).toLocaleDateString();
-        let text = `🧾 *Ticket ${settings.name}*\n📅 ${date}\n----------------\n`;
-        t.items.forEach(item => {
-            text += `${item.quantity} x ${item.name}  (${settings.currency}${(item.price * item.quantity).toFixed(2)})\n`;
-        });
-        text += `----------------\n*TOTAL: ${settings.currency}${t.total.toFixed(2)}*`;
-        
-        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-        window.open(url, '_blank');
-        setIsWhatsAppMode(false);
     };
 
     return (
