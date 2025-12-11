@@ -15,7 +15,7 @@ import { CashControlModal } from './components/CashControlModal';
 import { POSView } from './components/POSView';
 import { SuperAdminView } from './components/SuperAdminView';
 import { DEFAULT_SETTINGS, CATEGORIES } from './constants';
-import { Plus } from 'lucide-react';
+import { Plus, Image as ImageIcon, X, Trash2 } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -280,7 +280,7 @@ const App: React.FC = () => {
       }
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
       if (!currentProduct?.name) return;
       let pToSave = { ...currentProduct };
       if (pToSave.hasVariants && pToSave.variants) pToSave.stock = pToSave.variants.reduce((acc, v) => acc + (Number(v.stock) || 0), 0);
@@ -293,8 +293,38 @@ const App: React.FC = () => {
       else updated = [...products, pToSave];
 
       setProducts(updated); 
-      StorageService.saveProducts(updated); 
+      // Use specific method to handle images
+      await StorageService.saveProductWithImages(pToSave);
       setIsProductModalOpen(false);
+  };
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && currentProduct) {
+          if (file.size > 500000) { // Limit 500kb
+              alert("La imagen es muy grande. Máximo 500KB.");
+              return;
+          }
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              const base64String = reader.result as string;
+              const currentImages = currentProduct.images || [];
+              if (currentImages.length >= 2) {
+                  alert("Máximo 2 imágenes por producto.");
+                  return;
+              }
+              setCurrentProduct({ ...currentProduct, images: [...currentImages, base64String] });
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const removeImage = (index: number) => {
+      if (currentProduct && currentProduct.images) {
+          const newImages = [...currentProduct.images];
+          newImages.splice(index, 1);
+          setCurrentProduct({ ...currentProduct, images: newImages });
+      }
   };
   
   const handleProcessPurchase = (purchase: Purchase, updatedProducts: Product[]) => {
@@ -351,7 +381,7 @@ const App: React.FC = () => {
                     transactions={transactions}
                     purchases={purchases}
                     onNewProduct={() => { 
-                        setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [] }); 
+                        setCurrentProduct({ id: '', name: '', price: 0, category: CATEGORIES[0], stock: 0, variants: [], images: [] }); 
                         setIsProductModalOpen(true); 
                     }} 
                     onEditProduct={(p) => { 
@@ -385,7 +415,8 @@ const App: React.FC = () => {
                             category: CATEGORIES[0], 
                             stock: 0, 
                             variants: [], 
-                            barcode: barcode || '' 
+                            barcode: barcode || '',
+                            images: []
                         });
                         setIsProductModalOpen(true);
                     }}
@@ -454,6 +485,29 @@ const App: React.FC = () => {
                     </div>
                     <div className="p-8 overflow-y-auto custom-scrollbar">
                         <div className="space-y-5">
+                            
+                            {/* IMAGES SECTION */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Imágenes (Máx 2)</label>
+                                <div className="flex gap-4">
+                                    {currentProduct.images?.map((img, idx) => (
+                                        <div key={idx} className="relative w-24 h-24 rounded-2xl overflow-hidden border border-slate-200 group">
+                                            <img src={img} alt="Product" className="w-full h-full object-cover" />
+                                            <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-white/90 p-1 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <X className="w-4 h-4"/>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {(!currentProduct.images || currentProduct.images.length < 2) && (
+                                        <label className="w-24 h-24 rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-indigo-400 hover:text-indigo-500 hover:bg-indigo-50 transition-all">
+                                            <ImageIcon className="w-6 h-6 mb-1"/>
+                                            <span className="text-[10px] font-bold">Agregar</span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                                        </label>
+                                    )}
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nombre del Producto</label>
                                 <input className="w-full p-4 bg-slate-50 border border-slate-200 focus:border-slate-800 rounded-2xl font-bold text-lg outline-none transition-all" value={currentProduct.name} onChange={e => setCurrentProduct({...currentProduct!, name: e.target.value})} placeholder="Ej. Coca Cola 600ml"/>

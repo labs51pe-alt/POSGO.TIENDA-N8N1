@@ -20,8 +20,6 @@ const isDemo = () => {
     const session = localStorage.getItem(KEYS.SESSION);
     if (!session) return true;
     const user = JSON.parse(session);
-    // Demo user is ONLY the old legacy test user.
-    // New users created via Auth.tsx (even from 'Quiero Probar') are real Supabase users.
     return user.id === 'test-user-demo'; 
 };
 
@@ -59,7 +57,6 @@ export const StorageService = {
   // === SUPER ADMIN / LEADS ===
   saveLead: async (lead: Omit<Lead, 'id' | 'created_at'>) => {
       try {
-          console.log("Saving lead to Supabase:", lead);
           const { data, error } = await supabase.from('leads').insert({
               name: lead.name,
               business_name: lead.business_name,
@@ -67,21 +64,14 @@ export const StorageService = {
               status: 'NEW'
           }).select();
           
-          if (error) {
-              console.error("SUPABASE ERROR SAVING LEAD:", error);
-              throw error;
-          }
-          console.log("Lead saved successfully:", data);
+          if (error) throw error;
       } catch (e) {
           console.error("Critical error saving lead:", e);
       }
   },
   getLeads: async (): Promise<Lead[]> => {
       const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
-      if (error) {
-          console.error("Error fetching leads:", error);
-          return [];
-      }
+      if (error) return [];
       return data || [];
   },
   getAllStores: async (): Promise<Store[]> => {
@@ -90,7 +80,6 @@ export const StorageService = {
       return data;
   },
   deleteStore: async (storeId: string) => {
-      // Logic to delete store or mark inactive
       await supabase.from('stores').delete().eq('id', storeId);
   },
 
@@ -101,23 +90,87 @@ export const StorageService = {
         return s ? JSON.parse(s) : MOCK_PRODUCTS;
     } else {
         const storeId = await getStoreId();
-        if(!storeId) return []; // If real user but no store assigned yet, return empty
+        if(!storeId) return []; 
 
-        const { data, error } = await supabase.from('products').select('*').eq('store_id', storeId);
-        if (error || !data) return [];
-        return data.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            price: Number(p.price),
-            category: p.category,
-            stock: Number(p.stock),
-            barcode: p.barcode,
-            hasVariants: false, // Logic for variants can be expanded if DB supports it
-            variants: [], // Simplified for now, or fetch from related table
-            image: p.image_url
-        }));
+        // 1. Fetch Products
+        const { data: productsData, error: productsError } = await supabase.from('products').select('*').eq('store_id', storeId);
+        if (productsError || !productsData) return [];
+
+        // 2. Fetch Images for this store's products
+        const { data: imagesData } = await supabase.from('product_images').select('*').eq('store_id', storeId);
+        
+        return productsData.map((p: any) => {
+            // Filter images for this product
+            const prodImages = imagesData 
+                ? imagesData.filter((img: any) => img.product_id === p.id).map((img: any) => img.image_data)
+                : [];
+
+            return {
+                id: p.id,
+                name: p.name,
+                price: Number(p.price),
+                category: p.category,
+                stock: Number(p.stock),
+                barcode: p.barcode,
+                hasVariants: false, 
+                variants: [],
+                images: prodImages // Assign images array
+            };
+        });
     }
   },
+  
+  // New Method specifically to handle saving product + images logic
+  saveProductWithImages: async (product: Product) => {
+      if (isDemo()) {
+          const products = await StorageService.getProducts();
+          const index = products.findIndex(p => p.id === product.id);
+          let updatedProducts;
+          if (index >= 0) {
+              updatedProducts = products.map(p => p.id === product.id ? product : p);
+          } else {
+              updatedProducts = [...products, product];
+          }
+          localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(updatedProducts));
+      } else {
+          const storeId = await getStoreId();
+          if (!storeId) return;
+
+          // 1. Save Product Info
+          const payload: any = {
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                stock: product.stock,
+                category: product.category,
+                barcode: product.barcode,
+                store_id: storeId
+          };
+          
+          const { error } = await supabase.from('products').upsert(payload);
+          if (error) {
+              console.error('Error saving product info', error);
+              return;
+          }
+
+          // 2. Sync Images (Simple Strategy: Delete all for product, re-insert)
+          // Ideally we would diff this, but for < 2 images, delete/insert is fine.
+          if (product.images) {
+              await supabase.from('product_images').delete().eq('product_id', product.id);
+              
+              if (product.images.length > 0) {
+                  const imageInserts = product.images.map(imgData => ({
+                      product_id: product.id,
+                      image_data: imgData,
+                      store_id: storeId
+                  }));
+                  await supabase.from('product_images').insert(imageInserts);
+              }
+          }
+      }
+  },
+
+  // Used for bulk stock updates (e.g. after purchase) - Does NOT touch images to be safe/fast
   saveProducts: async (products: Product[]) => {
     if (isDemo()) {
         localStorage.setItem(KEYS.PRODUCTS, JSON.stringify(products));
@@ -127,6 +180,7 @@ export const StorageService = {
 
         for (const p of products) {
             const payload: any = {
+                id: p.id,
                 name: p.name,
                 price: p.price,
                 stock: p.stock,
@@ -134,9 +188,6 @@ export const StorageService = {
                 barcode: p.barcode,
                 store_id: storeId
             };
-            if (p.id && p.id.length > 10) payload.id = p.id; // Only use ID if it looks like a UUID (length check is a hack, better to check if existing)
-
-            // Upsert based on ID if present, otherwise insert
             const { error } = await supabase.from('products').upsert(payload);
             if (error) console.error('Error saving product', error);
         }

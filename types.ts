@@ -1,3 +1,4 @@
+
 export enum ViewState {
   POS,
   ADMIN,
@@ -24,7 +25,7 @@ export interface Product {
   barcode?: string;
   hasVariants?: boolean;
   variants?: ProductVariant[];
-  image?: string;
+  images?: string[]; // Changed from single image to array
   description?: string;
   cost?: number; // Added to match Supabase logic if needed visually
 }

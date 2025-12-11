@@ -199,9 +199,13 @@ export const InventoryView: React.FC<InventoryProps> = ({
                                         <tr key={p.id} className="hover:bg-slate-50/80 transition-colors group">
                                             <td className="p-6">
                                                 <div className="flex items-center gap-4">
-                                                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
-                                                        {p.name.charAt(0)}
-                                                    </div>
+                                                    {p.images && p.images.length > 0 ? (
+                                                        <img src={p.images[0]} alt="" className="w-10 h-10 rounded-xl object-cover border border-slate-200"/>
+                                                    ) : (
+                                                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-400 font-bold text-lg group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                                                            {p.name.charAt(0)}
+                                                        </div>
+                                                    )}
                                                     <div>
                                                         <div className="font-bold text-slate-800">{p.name}</div>
                                                         <div className="flex flex-wrap gap-2 mt-1">

@@ -224,6 +224,7 @@ export const POSView = ({ products, cart, transactions = [], onAddToCart, onUpda
                                 const isLowStock = p.stock <= 5 && !isOutOfStock;
                                 const inCartQty = getCartQuantity(p.id);
                                 const gradientClass = getProductGradient(p.name);
+                                const hasImage = p.images && p.images.length > 0;
                                 
                                 return (
                                     <div 
@@ -253,13 +254,21 @@ export const POSView = ({ products, cart, transactions = [], onAddToCart, onUpda
                                             )}
                                         </div>
 
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className={`w-16 h-16 md:w-24 md:h-24 rounded-[1rem] md:rounded-[1.5rem] flex items-center justify-center text-xl md:text-3xl font-black bg-gradient-to-br shadow-inner ${gradientClass} transition-transform duration-500 ${!isOutOfStock && 'group-hover:scale-110 group-hover:rotate-3'}`}>
-                                                {p.name.substring(0,2).toUpperCase()}
-                                            </div>
+                                        <div className="absolute inset-0 flex items-center justify-center p-4">
+                                            {hasImage ? (
+                                                <img 
+                                                    src={p.images![0]} 
+                                                    alt={p.name} 
+                                                    className={`w-full h-full object-cover rounded-2xl transition-transform duration-500 ${!isOutOfStock && 'group-hover:scale-110'}`}
+                                                />
+                                            ) : (
+                                                <div className={`w-full h-full rounded-2xl flex items-center justify-center text-xl md:text-3xl font-black bg-gradient-to-br shadow-inner ${gradientClass} transition-transform duration-500 ${!isOutOfStock && 'group-hover:scale-110 group-hover:rotate-3'}`}>
+                                                    {p.name.substring(0,2).toUpperCase()}
+                                                </div>
+                                            )}
                                         </div>
 
-                                        <div className="relative z-10 bg-white/60 backdrop-blur-md p-2 md:p-3 rounded-xl -mx-1 -mb-1 md:-mx-2 md:-mb-2 border border-white/50 shadow-sm">
+                                        <div className="relative z-10 bg-white/80 backdrop-blur-md p-2 md:p-3 rounded-xl -mx-1 -mb-1 md:-mx-2 md:-mb-2 border border-white/50 shadow-sm">
                                             <p className="text-[9px] font-bold text-slate-400 uppercase mb-0.5 truncate">{p.category}</p>
                                             <h3 className="font-bold text-slate-800 leading-tight mb-1 truncate text-xs md:text-sm">{p.name}</h3>
                                             <div className="flex items-center justify-between">
@@ -291,11 +300,17 @@ export const POSView = ({ products, cart, transactions = [], onAddToCart, onUpda
                                         const isOutOfStock = p.stock <= 0 && !p.hasVariants;
                                         const inCartQty = getCartQuantity(p.id);
                                         const gradientClass = getProductGradient(p.name);
+                                        const hasImage = p.images && p.images.length > 0;
+
                                         return (
                                             <tr key={p.id} className={`transition-colors ${isOutOfStock ? 'opacity-50 grayscale bg-slate-50' : 'hover:bg-indigo-50/30 cursor-pointer active:bg-indigo-50'}`} onClick={() => !isOutOfStock && handleProductClick(p)}>
                                                 <td className="p-4 md:p-5 pl-6 md:pl-8">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br flex items-center justify-center font-bold text-[10px] md:text-xs ${gradientClass}`}>{p.name.substring(0,2).toUpperCase()}</div>
+                                                        {hasImage ? (
+                                                            <img src={p.images![0]} alt={p.name} className="w-8 h-8 md:w-10 md:h-10 rounded-xl object-cover border border-slate-100"/>
+                                                        ) : (
+                                                            <div className={`w-8 h-8 md:w-10 md:h-10 rounded-xl bg-gradient-to-br flex items-center justify-center font-bold text-[10px] md:text-xs ${gradientClass}`}>{p.name.substring(0,2).toUpperCase()}</div>
+                                                        )}
                                                         <div>
                                                             <div className={`font-bold text-sm ${inCartQty > 0 ? 'text-indigo-700' : 'text-slate-800'}`}>{p.name}</div>
                                                             <div className="text-xs text-slate-400 font-medium">{p.stock} un.</div>
