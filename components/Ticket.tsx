@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Transaction, StoreSettings, CashShift } from '../types';
-import { Printer, X, CheckCircle, MessageCircle, Rocket, Share2, Send, Users, ArrowLeft } from 'lucide-react';
+import { Printer, X, CheckCircle, MessageCircle, Rocket, Share2, Send, Users, ArrowLeft, ChevronDown, RefreshCw } from 'lucide-react';
+import { COUNTRIES } from '../constants';
 
 interface TicketProps {
     type: 'SALE' | 'REPORT';
@@ -12,7 +13,12 @@ interface TicketProps {
 export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose }) => {
     const printRef = useRef<HTMLDivElement>(null);
     const [isWhatsAppMode, setIsWhatsAppMode] = useState(false);
+    
+    // WhatsApp State
     const [whatsAppNumber, setWhatsAppNumber] = useState('');
+    const [countryCode, setCountryCode] = useState('51');
+    const [sending, setSending] = useState(false);
+    const currentCountry = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
 
     const handlePrint = () => {
         const content = printRef.current?.innerHTML;
@@ -41,16 +47,49 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
         return text;
     };
 
-    const sendWhatsApp = (directNumber?: string) => {
-        const text = generateWhatsAppMessage();
-        let url = '';
-        if (directNumber) {
-            const cleanNumber = directNumber.replace(/\D/g, '');
-            const finalNumber = cleanNumber.length === 9 ? `51${cleanNumber}` : cleanNumber;
-            url = `https://wa.me/${finalNumber}?text=${encodeURIComponent(text)}`;
-        } else {
-            url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    const handleSendWebhook = async () => {
+        if (!whatsAppNumber) return;
+        
+        // Clean Number
+        const cleanNumber = whatsAppNumber.replace(/\D/g, '');
+        if (cleanNumber.length < 5) { // Basic validation
+             alert("Número inválido");
+             return;
         }
+
+        const fullPhone = `${countryCode}${cleanNumber}`;
+        const messageText = generateWhatsAppMessage();
+        
+        setSending(true);
+
+        try {
+            const webhookUrl = 'https://webhook.red51.site/webhook/posgo_ticket'; // New endpoint
+            
+            await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone: fullPhone,
+                    message: messageText,
+                    transaction_id: (data as Transaction).id,
+                    total: (data as Transaction).total,
+                    type: 'SALE_TICKET'
+                })
+            });
+            
+            alert('Ticket enviado correctamente.');
+            setIsWhatsAppMode(false);
+        } catch (error) {
+            console.error("Error sending webhook:", error);
+            alert('Hubo un error al enviar el ticket. Intenta de nuevo.');
+        } finally {
+            setSending(false);
+        }
+    };
+
+    const openLegacyWhatsApp = () => {
+        const text = generateWhatsAppMessage();
+        const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
         window.open(url, '_blank');
         setIsWhatsAppMode(false);
     };
@@ -160,12 +199,48 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
                         </div>
                     ) : (
                         <div className="animate-fade-in-up space-y-3">
-                            <div className="flex gap-2">
-                                <button onClick={() => setIsWhatsAppMode(false)} className="p-3 bg-slate-100 rounded-xl text-slate-500 hover:bg-slate-200"><ArrowLeft className="w-5 h-5"/></button>
-                                <input type="tel" className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 font-bold text-slate-700 outline-none focus:border-emerald-500" placeholder="Número (ej. 999...)" value={whatsAppNumber} onChange={(e) => setWhatsAppNumber(e.target.value)} autoFocus />
-                                <button onClick={() => sendWhatsApp(whatsAppNumber)} disabled={whatsAppNumber.length < 9} className="p-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200"><Send className="w-5 h-5"/></button>
+                            <div className="flex gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 items-center">
+                                <button onClick={() => setIsWhatsAppMode(false)} className="p-2 text-slate-400 hover:text-slate-600"><ArrowLeft className="w-5 h-5"/></button>
+                                
+                                {/* Country Select */}
+                                <div className="relative pl-1 pr-2 border-r border-slate-200">
+                                    <select 
+                                        value={countryCode}
+                                        onChange={(e) => setCountryCode(e.target.value)}
+                                        className="appearance-none bg-transparent font-bold text-slate-700 outline-none w-full h-full absolute inset-0 opacity-0 cursor-pointer z-10"
+                                    >
+                                        {COUNTRIES.map(c => (
+                                            <option key={c.code} value={c.code}>{c.flag} +{c.code}</option>
+                                        ))}
+                                    </select>
+                                    <div className="flex items-center gap-1 cursor-pointer">
+                                        <span className="text-lg">{currentCountry?.flag}</span>
+                                        <ChevronDown className="w-3 h-3 text-slate-400"/>
+                                    </div>
+                                </div>
+
+                                <input 
+                                    type="tel" 
+                                    className="flex-1 bg-transparent px-2 font-bold text-slate-700 outline-none placeholder-slate-300 w-full" 
+                                    placeholder={currentCountry.placeholder} 
+                                    value={whatsAppNumber} 
+                                    onChange={(e) => setWhatsAppNumber(e.target.value.replace(/\D/g, ''))}
+                                    maxLength={currentCountry.length}
+                                    autoFocus 
+                                />
                             </div>
-                            <button onClick={() => sendWhatsApp()} className="w-full py-2.5 bg-white border border-emerald-200 text-emerald-600 rounded-xl font-bold text-sm hover:bg-emerald-50 flex items-center justify-center gap-2"><Users className="w-4 h-4"/> Seleccionar de mis contactos</button>
+                            
+                            <button 
+                                onClick={handleSendWebhook} 
+                                disabled={whatsAppNumber.length < 5 || sending} 
+                                className="w-full py-3 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 font-bold"
+                            >
+                                {sending ? <RefreshCw className="w-5 h-5 animate-spin"/> : <><Send className="w-5 h-5"/> Enviar Ticket</>}
+                            </button>
+                            
+                            <button onClick={openLegacyWhatsApp} className="w-full py-2.5 bg-white border border-emerald-100 text-emerald-600 rounded-xl font-bold text-xs hover:bg-emerald-50 flex items-center justify-center gap-2">
+                                <Users className="w-3 h-3"/> Seleccionar Contacto (Web)
+                            </button>
                         </div>
                     )}
                 </div>

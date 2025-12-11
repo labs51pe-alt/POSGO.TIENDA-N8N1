@@ -7,35 +7,11 @@ import {
 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { StorageService } from '../services/storageService';
+import { COUNTRIES } from '../constants';
 
 interface AuthProps {
   onLogin: (user: UserProfile) => void;
 }
-
-interface CountryConfig {
-    code: string;
-    flag: string;
-    name: string;
-    length: number;
-    startsWith?: string; 
-    placeholder: string;
-}
-
-const COUNTRIES: CountryConfig[] = [
-    { code: '51', flag: '🇵🇪', name: 'Perú', length: 9, startsWith: '9', placeholder: '900 000 000' },
-    { code: '54', flag: '🇦🇷', name: 'Argentina', length: 10, placeholder: '9 11 1234 5678' },
-    { code: '591', flag: '🇧🇴', name: 'Bolivia', length: 8, placeholder: '7000 0000' },
-    { code: '55', flag: '🇧🇷', name: 'Brasil', length: 11, placeholder: '11 91234 5678' },
-    { code: '56', flag: '🇨🇱', name: 'Chile', length: 9, placeholder: '9 1234 5678' },
-    { code: '57', flag: '🇨🇴', name: 'Colombia', length: 10, placeholder: '300 123 4567' },
-    { code: '593', flag: '🇪🇨', name: 'Ecuador', length: 9, placeholder: '99 123 4567' },
-    { code: '52', flag: '🇲🇽', name: 'México', length: 10, placeholder: '55 1234 5678' },
-    { code: '595', flag: '🇵🇾', name: 'Paraguay', length: 9, placeholder: '981 123 456' },
-    { code: '598', flag: '🇺🇾', name: 'Uruguay', length: 9, placeholder: '99 123 456' },
-    { code: '58', flag: '🇻🇪', name: 'Venezuela', length: 10, placeholder: '414 123 4567' },
-    { code: '34', flag: '🇪🇸', name: 'España', length: 9, placeholder: '600 123 456' },
-    { code: '1', flag: '🇺🇸', name: 'USA', length: 10, placeholder: '202 555 0123' },
-];
 
 export const Auth: React.FC<AuthProps> = ({ onLogin }) => {
   const [activeTab, setActiveTab] = useState<'CLIENT' | 'DEMO'>('DEMO');

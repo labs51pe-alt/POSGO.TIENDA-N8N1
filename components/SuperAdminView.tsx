@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lead, Store } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Building2, Trash2, MessageCircle, Phone, Calendar, RefreshCw, ShieldAlert, Check } from 'lucide-react';
+import { Users, Building2, Trash2, MessageCircle, Phone, Calendar, RefreshCw, ShieldAlert, Check, Database } from 'lucide-react';
 
 export const SuperAdminView: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'LEADS' | 'STORES'>('LEADS');
@@ -11,13 +11,21 @@ export const SuperAdminView: React.FC = () => {
 
     const fetchData = async () => {
         setLoading(true);
-        const [l, s] = await Promise.all([
-            StorageService.getLeads(),
-            StorageService.getAllStores()
-        ]);
-        setLeads(l);
-        setStores(s);
-        setLoading(false);
+        try {
+            const [l, s] = await Promise.all([
+                StorageService.getLeads(),
+                StorageService.getAllStores()
+            ]);
+            setLeads(l);
+            setStores(s);
+            if (activeTab === 'LEADS' && l.length === 0) {
+                 console.log("No leads found. If data exists in DB, check RLS policies.");
+            }
+        } catch (error) {
+            console.error("Error fetching admin data:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
@@ -45,7 +53,7 @@ export const SuperAdminView: React.FC = () => {
                     </h1>
                     <p className="text-slate-500 font-medium">Panel de control maestro</p>
                 </div>
-                <button onClick={fetchData} className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50">
+                <button onClick={fetchData} className="p-3 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
                     <RefreshCw className={`w-5 h-5 text-slate-500 ${loading ? 'animate-spin' : ''}`}/>
                 </button>
             </div>
@@ -96,6 +104,7 @@ export const SuperAdminView: React.FC = () => {
                                             <div className="flex items-center gap-2 text-slate-500 font-medium text-sm">
                                                 <Calendar className="w-4 h-4"/> {new Date(lead.created_at).toLocaleDateString()}
                                             </div>
+                                            <div className="text-[10px] text-slate-400 pl-6">{new Date(lead.created_at).toLocaleTimeString()}</div>
                                         </td>
                                         <td className="p-6 font-bold text-slate-800">{lead.name}</td>
                                         <td className="p-6">
@@ -133,7 +142,16 @@ export const SuperAdminView: React.FC = () => {
                             {((activeTab === 'LEADS' && leads.length === 0) || (activeTab === 'STORES' && stores.length === 0)) && (
                                 <tr>
                                     <td colSpan={5} className="p-12 text-center text-slate-300">
-                                        No hay datos registrados aún.
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Database className="w-10 h-10 opacity-20"/>
+                                            <p>No hay datos visibles.</p>
+                                            {activeTab === 'LEADS' && (
+                                                <div className="bg-amber-50 text-amber-600 p-3 rounded-xl text-xs max-w-md border border-amber-100">
+                                                    <strong>Nota para el Admin:</strong> Si ves datos en la tabla de Supabase pero no aquí, 
+                                                    ejecuta el comando SQL para liberar los permisos de lectura a 'anon' o inicia sesión como usuario autenticado.
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             )}
