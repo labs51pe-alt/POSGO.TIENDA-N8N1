@@ -57,12 +57,13 @@ export const StorageService = {
   // === SUPER ADMIN / LEADS ===
   saveLead: async (lead: Omit<Lead, 'id' | 'created_at'>) => {
       try {
-          const { data, error } = await supabase.from('leads').insert({
+          // Changed to Upsert to handle duplicates based on phone constraint
+          const { data, error } = await supabase.from('leads').upsert({
               name: lead.name,
               business_name: lead.business_name,
               phone: lead.phone,
               status: 'NEW'
-          }).select();
+          }, { onConflict: 'phone' }).select(); // Requires unique constraint on 'phone' in DB
           
           if (error) throw error;
       } catch (e) {
@@ -73,6 +74,9 @@ export const StorageService = {
       const { data, error } = await supabase.from('leads').select('*').order('created_at', { ascending: false });
       if (error) return [];
       return data || [];
+  },
+  deleteLead: async (leadId: string) => {
+      await supabase.from('leads').delete().eq('id', leadId);
   },
   getAllStores: async (): Promise<Store[]> => {
       const { data, error } = await supabase.from('stores').select('*').order('created_at', { ascending: false });

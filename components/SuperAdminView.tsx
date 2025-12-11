@@ -39,6 +39,13 @@ export const SuperAdminView: React.FC = () => {
         }
     };
 
+    const handleDeleteLead = async (id: string) => {
+        if (window.confirm('¿Eliminar este lead permanentemente?')) {
+            await StorageService.deleteLead(id);
+            fetchData();
+        }
+    };
+
     const handleWhatsApp = (phone: string, name: string) => {
         const text = `Hola ${name}, te contacto desde PosGo! 🚀 ¿Cómo podemos ayudarte?`;
         window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
@@ -112,12 +119,21 @@ export const SuperAdminView: React.FC = () => {
                                         </td>
                                         <td className="p-6 font-mono text-slate-600">{lead.phone}</td>
                                         <td className="p-6 text-right">
-                                            <button 
-                                                onClick={() => handleWhatsApp(lead.phone, lead.name)}
-                                                className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-colors shadow-emerald-200 shadow-md text-xs"
-                                            >
-                                                <MessageCircle className="w-4 h-4"/> Contactar
-                                            </button>
+                                            <div className="flex justify-end gap-2">
+                                                <button 
+                                                    onClick={() => handleWhatsApp(lead.phone, lead.name)}
+                                                    className="inline-flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 transition-colors shadow-emerald-200 shadow-md text-xs"
+                                                >
+                                                    <MessageCircle className="w-4 h-4"/> Contactar
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDeleteLead(lead.id)}
+                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                                                    title="Eliminar Lead"
+                                                >
+                                                    <Trash2 className="w-5 h-5"/>
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))
