@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Transaction, StoreSettings, CashShift } from '../types';
-import { Printer, X, CheckCircle, Rocket, Share2, Download, FileText, RefreshCw, MapPin, Phone } from 'lucide-react';
+import { Printer, X, CheckCircle, Rocket, Share2, Download, FileText, RefreshCw, MapPin, Phone, MessageCircle, Send } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import { supabase } from '../services/supabase';
 
 interface TicketProps {
     type: 'SALE' | 'REPORT';
@@ -13,6 +14,11 @@ interface TicketProps {
 export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose }) => {
     const printRef = useRef<HTMLDivElement>(null);
     const [generating, setGenerating] = useState(false);
+    
+    // Estados para WhatsApp
+    const [whatsappPhone, setWhatsappPhone] = useState('');
+    const [showPhoneInput, setShowPhoneInput] = useState(false);
+    const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
 
     // --- GENERACIÓN DE PDF PROFESIONAL ---
     const generatePDFBlob = (): Blob => {
@@ -279,6 +285,87 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
         }
     };
 
+    // --- LÓGICA DE WHATSAPP ---
+    const handleSendWhatsApp = async () => {
+        // 1. Mostrar input si no hay número
+        if (!showPhoneInput) {
+            setShowPhoneInput(true);
+            return;
+        }
+
+        // 2. Validar
+        if (!whatsappPhone || whatsappPhone.length < 9) {
+            alert("Por favor ingresa un número de celular válido.");
+            return;
+        }
+
+        setSendingWhatsapp(true);
+        try {
+            // A. Generar PDF
+            const blob = generatePDFBlob();
+            const fileName = `ticket_${type}_${Date.now()}.pdf`;
+            const file = new File([blob], fileName, { type: 'application/pdf' });
+
+            // B. Subir a Supabase Storage
+            // IMPORTANTE: Requiere bucket público 'tickets'
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('tickets')
+                .upload(fileName, file);
+
+            if (uploadError) {
+                console.error("Supabase Storage Error:", uploadError);
+                throw new Error("No se pudo subir el archivo. Verifica que el bucket 'tickets' exista en Supabase.");
+            }
+
+            // C. Obtener URL Pública
+            const { data: { publicUrl } } = supabase.storage
+                .from('tickets')
+                .getPublicUrl(fileName);
+
+            // D. Preparar Payload para n8n
+            const total = type === 'SALE' ? (data as Transaction).total.toFixed(2) : '0.00';
+            const docId = type === 'SALE' ? (data as Transaction).id.slice(-8).toUpperCase() : 'CIERRE';
+            
+            const payload = {
+                user_phone: "51900000000", // Remitente genérico o del sistema
+                plan: "pro", // Para evitar footer de 'free' en n8n si aplica
+                client: {
+                    name: "Cliente",
+                    phone: whatsappPhone
+                },
+                company: {
+                    name: settings.name
+                },
+                quote: {
+                    number: docId,
+                    message: `Hola! 🚀\n\nAquí tienes tu comprobante digital de *${settings.name}*.\n\n📄 Ticket: #${docId}\n💰 Total: ${settings.currency} ${total}\n\nGracias por tu preferencia.`
+                },
+                pdfUrl: publicUrl
+            };
+
+            // E. Enviar a Webhook
+            const response = await fetch('https://webhook.red51.site/webhook/send-quote-whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert("¡Enviado a WhatsApp exitosamente!");
+                setShowPhoneInput(false);
+                setWhatsappPhone('');
+            } else {
+                alert("Hubo un problema al contactar con el servicio de mensajería.");
+            }
+
+        } catch (error: any) {
+            console.error(error);
+            alert("Error: " + (error.message || "Error desconocido al enviar."));
+        } finally {
+            setSendingWhatsapp(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[110] flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm flex flex-col overflow-hidden animate-fade-in-up border border-slate-200 h-[85vh]">
@@ -393,27 +480,66 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
                     </div>
                 </div>
 
-                {/* ACCIONES */}
-                <div className="p-4 bg-white border-t border-slate-100 grid grid-cols-2 gap-3 shrink-0">
-                     <button 
-                        onClick={handleSharePDF} 
-                        disabled={generating}
-                        className="col-span-1 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 disabled:opacity-50"
-                     >
-                        {generating ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Share2 className="w-5 h-5"/>}
-                        <span className="text-xs sm:text-sm">Compartir PDF</span>
-                    </button>
-
-                    <button 
-                        onClick={handlePrint} 
-                        className="col-span-1 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg"
-                    >
-                        <Printer className="w-5 h-5"/>
-                        <span className="text-xs sm:text-sm">Imprimir</span>
-                    </button>
+                {/* AREA DE ACCIONES */}
+                <div className="p-4 bg-white border-t border-slate-100 shrink-0">
                     
-                    <div className="col-span-2 text-center text-[10px] text-slate-400 font-medium">
-                        * Compatible con impresoras térmicas Bluetooth y USB
+                    {/* Input desplegable para WhatsApp */}
+                    {showPhoneInput && (
+                        <div className="mb-3 flex items-center gap-2 animate-fade-in-up">
+                            <div className="flex-1 relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600"/>
+                                <input 
+                                    type="tel" 
+                                    placeholder="Número de WhatsApp (Ej: 999...)" 
+                                    className="w-full pl-9 pr-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-200"
+                                    value={whatsappPhone}
+                                    onChange={(e) => setWhatsappPhone(e.target.value.replace(/\D/g,''))}
+                                    autoFocus
+                                />
+                            </div>
+                            <button 
+                                onClick={handleSendWhatsApp}
+                                disabled={sendingWhatsapp}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {sendingWhatsapp ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}
+                            </button>
+                            <button 
+                                onClick={() => setShowPhoneInput(false)}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2.5 rounded-xl transition-all"
+                            >
+                                <X className="w-5 h-5"/>
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                         {/* Botón WhatsApp Principal */}
+                         <button 
+                            onClick={handleSendWhatsApp} 
+                            disabled={generating || sendingWhatsapp || (showPhoneInput && !whatsappPhone)}
+                            className="col-span-1 py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-200 disabled:opacity-50"
+                         >
+                            <MessageCircle className="w-5 h-5"/>
+                            <span className="text-xs sm:text-sm">Enviar WhatsApp</span>
+                        </button>
+
+                         <button 
+                            onClick={handleSharePDF} 
+                            disabled={generating}
+                            className="col-span-1 py-3 bg-indigo-500 hover:bg-indigo-600 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-50"
+                         >
+                            {generating ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Share2 className="w-5 h-5"/>}
+                            <span className="text-xs sm:text-sm">Compartir PDF</span>
+                        </button>
+
+                        <button 
+                            onClick={handlePrint} 
+                            className="col-span-2 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-black transition-colors flex items-center justify-center gap-2 shadow-lg"
+                        >
+                            <Printer className="w-5 h-5"/>
+                            <span className="text-xs sm:text-sm">Imprimir Ticket</span>
+                        </button>
                     </div>
                 </div>
             </div>
