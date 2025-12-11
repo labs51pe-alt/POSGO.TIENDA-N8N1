@@ -76,17 +76,21 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
                 }
             };
             
-            await fetch(webhookUrl, {
+            const response = await fetch(webhookUrl, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+
+            if (!response.ok) {
+                throw new Error(`Error del servidor: ${response.status}`);
+            }
             
             alert('Ticket enviado correctamente.');
             setIsWhatsAppMode(false);
         } catch (error) {
             console.error("Error sending webhook:", error);
-            alert('Hubo un error al enviar el ticket. Intenta de nuevo.');
+            alert('Hubo un error al generar o enviar el ticket. Verifica el número o intenta de nuevo.');
         } finally {
             setSending(false);
         }
