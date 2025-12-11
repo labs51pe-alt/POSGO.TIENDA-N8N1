@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
 import { Transaction, StoreSettings, CashShift } from '../types';
-import { Printer, X, CheckCircle, Rocket, Share2, Download, FileText, RefreshCw, MapPin, Phone, MessageCircle, Send } from 'lucide-react';
+import { Printer, X, CheckCircle, Rocket, Share2, Download, FileText, RefreshCw, MapPin, Phone, MessageCircle, Send, ChevronDown, AlertCircle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import { supabase } from '../services/supabase';
+import { COUNTRIES } from '../constants';
 
 interface TicketProps {
     type: 'SALE' | 'REPORT';
@@ -16,9 +17,12 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
     const [generating, setGenerating] = useState(false);
     
     // Estados para WhatsApp
+    const [countryCode, setCountryCode] = useState('51');
     const [whatsappPhone, setWhatsappPhone] = useState('');
     const [showPhoneInput, setShowPhoneInput] = useState(false);
     const [sendingWhatsapp, setSendingWhatsapp] = useState(false);
+
+    const currentCountry = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0];
 
     // --- GENERACIÓN DE PDF PROFESIONAL ---
     const generatePDFBlob = (): Blob => {
@@ -294,9 +298,9 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
         }
 
         // 2. Validar
-        if (!whatsappPhone || whatsappPhone.length < 9) {
-            alert("Por favor ingresa un número de celular válido.");
-            return;
+        if (!whatsappPhone || whatsappPhone.length < (currentCountry.length - 2)) {
+             alert(`Por favor ingresa un número válido para ${currentCountry.name}.`);
+             return;
         }
 
         setSendingWhatsapp(true);
@@ -326,12 +330,15 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
             const total = type === 'SALE' ? (data as Transaction).total.toFixed(2) : '0.00';
             const docId = type === 'SALE' ? (data as Transaction).id.slice(-8).toUpperCase() : 'CIERRE';
             
+            // Construir teléfono completo (Código Pais + Numero)
+            const fullPhone = `${countryCode}${whatsappPhone}`;
+
             const payload = {
                 user_phone: "51900000000", // Remitente genérico o del sistema
                 plan: "pro", // Para evitar footer de 'free' en n8n si aplica
                 client: {
                     name: "Cliente",
-                    phone: whatsappPhone
+                    phone: fullPhone 
                 },
                 company: {
                     name: settings.name
@@ -485,31 +492,45 @@ export const Ticket: React.FC<TicketProps> = ({ type, data, settings, onClose })
                     
                     {/* Input desplegable para WhatsApp */}
                     {showPhoneInput && (
-                        <div className="mb-3 flex items-center gap-2 animate-fade-in-up">
-                            <div className="flex-1 relative">
-                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-600"/>
+                        <div className="mb-3 animate-fade-in-up">
+                            <div className="flex items-center gap-2 mb-2 bg-emerald-50 border border-emerald-200 rounded-xl p-1">
+                                <div className="relative pl-1 pr-2 border-r border-emerald-200 min-w-[90px]">
+                                    <select 
+                                        value={countryCode}
+                                        onChange={(e) => setCountryCode(e.target.value)}
+                                        className="appearance-none bg-transparent font-bold text-slate-700 outline-none w-full h-full absolute inset-0 opacity-0 cursor-pointer z-10"
+                                    >
+                                        {COUNTRIES.map(c => (
+                                            <option key={c.code} value={c.code}>{c.flag} +{c.code} {c.name}</option>
+                                        ))}
+                                    </select>
+                                    <div className="flex items-center justify-center gap-1 cursor-pointer py-2">
+                                        <span className="text-xl">{currentCountry?.flag}</span>
+                                        <span className="text-xs font-bold text-emerald-800">+{countryCode}</span>
+                                        <ChevronDown className="w-3 h-3 text-emerald-500"/>
+                                    </div>
+                                </div>
+                                
                                 <input 
                                     type="tel" 
-                                    placeholder="Número de WhatsApp (Ej: 999...)" 
-                                    className="w-full pl-9 pr-4 py-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-200"
+                                    placeholder={currentCountry?.placeholder || "999..."} 
+                                    className="flex-1 bg-transparent py-2 px-2 text-sm font-bold text-slate-800 outline-none placeholder:text-emerald-300/70"
                                     value={whatsappPhone}
                                     onChange={(e) => setWhatsappPhone(e.target.value.replace(/\D/g,''))}
                                     autoFocus
                                 />
+                                
+                                <button 
+                                    onClick={handleSendWhatsApp}
+                                    disabled={sendingWhatsapp}
+                                    className="p-2 bg-emerald-500 text-white rounded-lg shadow-sm hover:bg-emerald-600 disabled:opacity-50 transition-all active:scale-95"
+                                >
+                                    {sendingWhatsapp ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Send className="w-4 h-4"/>}
+                                </button>
                             </div>
-                            <button 
-                                onClick={handleSendWhatsApp}
-                                disabled={sendingWhatsapp}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white p-2.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
-                            >
-                                {sendingWhatsapp ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Send className="w-5 h-5"/>}
-                            </button>
-                            <button 
-                                onClick={() => setShowPhoneInput(false)}
-                                className="bg-slate-100 hover:bg-slate-200 text-slate-500 p-2.5 rounded-xl transition-all"
-                            >
-                                <X className="w-5 h-5"/>
-                            </button>
+                            <div className="text-center">
+                                <button onClick={() => setShowPhoneInput(false)} className="text-[10px] font-bold text-slate-400 hover:text-slate-600">Cancelar envío</button>
+                            </div>
                         </div>
                     )}
 
